@@ -17,27 +17,30 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common'
+import { AuthenticatedRateLimitGuard } from '../../common/guards/authenticated-rate-limit.guard'
 import { ApiBearerAuth, ApiOAuth2, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger'
 import { AdminCreateRunnerDto } from '../dto/create-runner.dto'
 import { Audit, MASKED_AUDIT_VALUE, TypedRequest } from '../../audit/decorators/audit.decorator'
 import { AuditAction } from '../../audit/enums/audit-action.enum'
 import { AuditTarget } from '../../audit/enums/audit-target.enum'
-import { CombinedAuthGuard } from '../../auth/combined-auth.guard'
-import { SystemActionGuard } from '../../auth/system-action.guard'
-import { RequiredApiRole } from '../../common/decorators/required-role.decorator'
+import { RequiredSystemRole } from '../../user/decorators/required-system-role.decorator'
 import { RegionService } from '../../region/services/region.service'
 import { CreateRunnerResponseDto } from '../../sandbox/dto/create-runner-response.dto'
 import { RunnerFullDto } from '../../sandbox/dto/runner-full.dto'
 import { RunnerDto } from '../../sandbox/dto/runner.dto'
+import { RunnerSnapshotDto } from '../../sandbox/dto/runner-snapshot.dto'
 import { RunnerService } from '../../sandbox/services/runner.service'
 import { SystemRole } from '../../user/enums/system-role.enum'
+import { AuthStrategy } from '../../auth/decorators/auth-strategy.decorator'
+import { AuthStrategyType } from '../../auth/enums/auth-strategy-type.enum'
 
-@ApiTags('admin')
 @Controller('admin/runners')
-@UseGuards(CombinedAuthGuard, SystemActionGuard)
-@RequiredApiRole([SystemRole.ADMIN])
+@ApiTags('admin')
 @ApiOAuth2(['openid', 'profile', 'email'])
 @ApiBearerAuth()
+@AuthStrategy([AuthStrategyType.API_KEY, AuthStrategyType.JWT])
+@RequiredSystemRole(SystemRole.ADMIN)
+@UseGuards(AuthenticatedRateLimitGuard)
 export class AdminRunnerController {
   constructor(
     private readonly runnerService: RunnerService,
@@ -93,20 +96,65 @@ export class AdminRunnerController {
     return CreateRunnerResponseDto.fromRunner(runner, apiKey)
   }
 
+  @Get('/by-sandbox/:sandboxId')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Get runner by sandbox ID',
+    operationId: 'adminGetRunnerBySandboxId',
+  })
+  @ApiParam({
+    name: 'sandboxId',
+    description: 'Sandbox ID',
+    type: String,
+  })
+  @ApiResponse({
+    status: 200,
+    type: RunnerFullDto,
+  })
+  async getRunnerBySandboxId(@Param('sandboxId') sandboxId: string): Promise<RunnerFullDto> {
+    const runner = await this.runnerService.findBySandboxId(sandboxId)
+
+    if (!runner) {
+      throw new NotFoundException('Runner not found')
+    }
+
+    return RunnerFullDto.fromRunner(runner)
+  }
+
+  @Get('/by-snapshot-ref')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Get runners by snapshot ref',
+    operationId: 'adminGetRunnersBySnapshotRef',
+  })
+  @ApiQuery({
+    name: 'ref',
+    description: 'Snapshot ref',
+    type: String,
+    required: true,
+  })
+  @ApiResponse({
+    status: 200,
+    type: [RunnerSnapshotDto],
+  })
+  async getRunnersBySnapshotRef(@Query('ref') ref: string): Promise<RunnerSnapshotDto[]> {
+    return this.runnerService.getRunnersBySnapshotRef(ref)
+  }
+
   @Get(':id')
   @HttpCode(200)
   @ApiOperation({
     summary: 'Get runner by ID',
     operationId: 'adminGetRunnerById',
   })
-  @ApiResponse({
-    status: 200,
-    type: RunnerFullDto,
-  })
   @ApiParam({
     name: 'id',
     description: 'Runner ID',
     type: String,
+  })
+  @ApiResponse({
+    status: 200,
+    type: RunnerFullDto,
   })
   async getRunnerById(@Param('id', ParseUUIDPipe) id: string): Promise<RunnerFullDto> {
     return this.runnerService.findOneFullOrFail(id)
@@ -118,15 +166,15 @@ export class AdminRunnerController {
     summary: 'List all runners',
     operationId: 'adminListRunners',
   })
-  @ApiResponse({
-    status: 200,
-    type: [RunnerFullDto],
-  })
   @ApiQuery({
     name: 'regionId',
     description: 'Filter runners by region ID',
     type: String,
     required: false,
+  })
+  @ApiResponse({
+    status: 200,
+    type: [RunnerFullDto],
   })
   async findAll(@Query('regionId') regionId?: string): Promise<RunnerFullDto[]> {
     if (regionId) {
@@ -167,13 +215,13 @@ export class AdminRunnerController {
     summary: 'Delete runner',
     operationId: 'adminDeleteRunner',
   })
-  @ApiResponse({
-    status: 204,
-  })
   @ApiParam({
     name: 'id',
     description: 'Runner ID',
     type: String,
+  })
+  @ApiResponse({
+    status: 204,
   })
   @Audit({
     action: AuditAction.DELETE,
