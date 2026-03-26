@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0
  */
 
-import { Injectable, Logger, OnApplicationShutdown } from '@nestjs/common'
+import { ConflictException, Injectable, Logger, OnApplicationShutdown } from '@nestjs/common'
 import { Cron, CronExpression } from '@nestjs/schedule'
 import { In, IsNull, MoreThanOrEqual, Not, Raw } from 'typeorm'
 import { randomUUID } from 'crypto'
@@ -855,6 +855,13 @@ export class SandboxManager implements TrackableJobExecutions, OnApplicationShut
             }
           }
         } catch (error) {
+          if (error instanceof ConflictException) {
+            this.logger.warn(
+              `Sandbox ${sandboxId} was modified by another operation during sync, skipping error transition`,
+            )
+            break
+          }
+
           this.logger.error(`Error processing desired state for sandbox ${sandboxId}:`, error)
 
           const { recoverable, errorReason } = sanitizeSandboxError(error)
