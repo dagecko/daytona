@@ -983,7 +983,7 @@ export class SnapshotManager implements TrackableJobExecutions, OnApplicationShu
     return SYNC_AGAIN
   }
 
-  private async updateSnapshotState(snapshotId: string, state: SnapshotState, errorReason?: string) {
+  private async updateSnapshotState(snapshotId: string, state: SnapshotState, errorReason?: string, size?: number) {
     const partialUpdate: Partial<Snapshot> = {
       state,
     }
@@ -994,6 +994,10 @@ export class SnapshotManager implements TrackableJobExecutions, OnApplicationShu
 
     if (errorReason !== undefined) {
       partialUpdate.errorReason = errorReason
+    }
+
+    if (size !== undefined) {
+      partialUpdate.size = size
     }
 
     const result = await this.snapshotRepository.update(
@@ -1197,16 +1201,17 @@ export class SnapshotManager implements TrackableJobExecutions, OnApplicationShu
 
       const MAX_SIZE_GB = organization.maxSnapshotSize
 
+      snapshot.size = sizeGB
+
       if (sizeGB > MAX_SIZE_GB) {
         await this.updateSnapshotState(
           snapshot.id,
           SnapshotState.ERROR,
           `Snapshot size (${sizeGB.toFixed(2)}GB) exceeds maximum allowed size of ${MAX_SIZE_GB}GB`,
+          sizeGB,
         )
         return DONT_SYNC_AGAIN
       }
-
-      snapshot.size = sizeGB
     }
 
     // If entrypoint is not explicitly set, set it from snapshotInfoResponse
