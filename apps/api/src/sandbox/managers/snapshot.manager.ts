@@ -726,7 +726,7 @@ export class SnapshotManager implements TrackableJobExecutions, OnApplicationShu
     })
 
     if (snapshot.ref && snapshotRunner) {
-      if (snapshotRunner.state === SnapshotRunnerState.READY) {
+      if (snapshotRunner.state === SnapshotRunnerState.READY && snapshot.size != null) {
         await this.updateSnapshotState(snapshot.id, SnapshotState.ACTIVE)
         return DONT_SYNC_AGAIN
       } else if (snapshotRunner.state === SnapshotRunnerState.ERROR) {
@@ -762,6 +762,10 @@ export class SnapshotManager implements TrackableJobExecutions, OnApplicationShu
       snapshotInfoResponse.sizeGB,
       snapshotInfoResponse.entrypoint,
     )
+
+    if (snapshot.size == null) {
+      return DONT_SYNC_AGAIN
+    }
 
     try {
       await runnerAdapter.inspectSnapshotInRegistry(snapshot.ref, internalRegistry)
@@ -959,6 +963,11 @@ export class SnapshotManager implements TrackableJobExecutions, OnApplicationShu
           snapshotDigestResponse.hash,
           snapshotDigestResponse.sizeGB,
         )
+
+        if (snapshot.size == null) {
+          return DONT_SYNC_AGAIN
+        }
+
         await this.snapshotRepository.save(snapshot)
       }
 
