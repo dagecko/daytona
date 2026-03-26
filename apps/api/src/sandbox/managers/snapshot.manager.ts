@@ -755,7 +755,7 @@ export class SnapshotManager implements TrackableJobExecutions, OnApplicationShu
       throw new Error('No internal registry found for snapshot')
     }
 
-    await this.processSnapshotDigest(
+    const digestSyncState = await this.processSnapshotDigest(
       snapshot,
       internalRegistry,
       snapshotInfoResponse.hash,
@@ -763,7 +763,7 @@ export class SnapshotManager implements TrackableJobExecutions, OnApplicationShu
       snapshotInfoResponse.entrypoint,
     )
 
-    if (snapshot.size == null) {
+    if (digestSyncState === DONT_SYNC_AGAIN) {
       return DONT_SYNC_AGAIN
     }
 
@@ -957,14 +957,14 @@ export class SnapshotManager implements TrackableJobExecutions, OnApplicationShu
         }
 
         const snapshotDigestResponse = await runnerAdapter.inspectSnapshotInRegistry(imageName, registry)
-        await this.processSnapshotDigest(
+        const digestSyncState = await this.processSnapshotDigest(
           snapshot,
           internalRegistry,
           snapshotDigestResponse.hash,
           snapshotDigestResponse.sizeGB,
         )
 
-        if (snapshot.size == null) {
+        if (digestSyncState === DONT_SYNC_AGAIN) {
           return DONT_SYNC_AGAIN
         }
 
