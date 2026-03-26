@@ -49,7 +49,7 @@ func (d *DockerClient) runDockerImageBuildWithBuildKitSession(
 	resp, err := d.apiClient.ImageBuild(ctx, dockerBuildContext, buildOpts)
 	if err != nil {
 		_ = sess.Close()
-		_ = <-runDone // join session goroutine after Close
+		<-runDone // join session goroutine after Close
 		return fmt.Errorf("failed to build image: %w", err)
 	}
 	defer resp.Body.Close()
